@@ -184,7 +184,7 @@ class BMWiApiClient(object):
         api_response = self.call_endpoint('vehicles')
         vehicle_data = None
         for vehicle_record in api_response['vehicles']:
-            if vehicle['vin'] == vin:
+            if vehicle_record['vin'] == vin:
                 vehicle_data = vehicle_record
                 break
         else:

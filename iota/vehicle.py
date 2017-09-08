@@ -1,4 +1,7 @@
 import collections
+import urllib.parse
+
+from iota import api
 
 # It's nice to be exact; official SI unit conversion states that one inch is
 # equal to 2.54 centimeters. This factor derives from that fact.
@@ -8,6 +11,18 @@ MILE_CONVERSION_FACTOR = 2.54 * 12 * 5280 / 100 / 1000
 class Vehicle(object):
     """Represents a single vehicle registered to a ConnectedDrive account.
     
+    Vehicle commands are executed asynchronously on the servers; the returned
+    object can be used to later check on the status of the command. An example
+    of the returned event details:
+            
+    {
+        "executionStatus": {
+            "eventId": "<some string>@bmw.de",
+            "status": "INITIATED",
+            "serviceType": "LIGHT_FLASH"
+        }
+    }
+            
     Attributes:
         body_type: BMW's internal model code (eg I01, I12).
         brand: Line of vehicles this instance belongs to.
@@ -104,11 +119,14 @@ class Vehicle(object):
     )
     windows = __Windows
 
-    def __init__(
-            self, api_client, vehicle_data: dict, status_data: dict,
-            distance_unit: str='kilometers'):
+    __API_ENDPOINT_TEMPLATE = '/vehicles/{vin}/{endpoint}'
 
-        self.api_client = api_client
+    def __init__(
+            self, api_client: api.BMWiApiClient, vehicle_data: dict,
+            status_data: dict, distance_unit: str='kilometers'
+    ):
+
+        self.__api_client = api_client
         self.distance_unit = distance_unit
 
         for attribute in [
@@ -129,9 +147,25 @@ class Vehicle(object):
         }.items():
             setattr(self, attribute, vehicle_data[source])
 
-        self.update_status(status_data)
+        self.features = self.__Features(
+            a4a=vehicle_data['a4a'], car_cloud=vehicle_data['carCloud'],
+            charge_now=vehicle_data['chargeNow'],
+            climate_control=vehicle_data['climateControl'],
+            climate_now=vehicle_data['climateNow'],
+            door_lock=vehicle_data['doorLock'],
+            door_unlock=vehicle_data['doorUnlock'],
+            horn_blow=vehicle_data['hornBlow'],
+            last_destinations=vehicle_data['lastDestinations'],
+            light_flash=vehicle_data['lightFlash'],
+            remote_360=vehicle_data['remote360'],
+            send_poi=vehicle_data['sendPoi'],
+            smart_solution=vehicle_data['smartSolution'],
+            vehicle_finder=vehicle_data['vehicleFinder'],
+        )
 
-    def update_status(self, status_data: dict):
+        self.__update_status(status_data)
+
+    def __update_status(self, status_data: dict):
 
         for attribute in [
             'hood',
@@ -166,3 +200,72 @@ class Vehicle(object):
             status_data['windowDriverFront'], status_data['windowDriverRear'],
             status_data['windowPassengerFront'], status_data['windowPassengerRear']
         )
+
+    def update(self):
+        """Make a call to BMW servers and refresh this vehicle's status.
+        """
+
+        api_response = self.__api_client.call_endpoint(
+            'vehicles/{vin}/status'.format(vin=self.vin))
+
+        self.__update_status(api_response['vehicleStatus'])
+
+    def __execute_command(self, command: str, **kwargs) -> dict:
+        """
+
+        Args:
+            command: API-recognized command string (eg
+
+        Returns:
+            The response from the BMW API. Vehicle commands are executed
+            asynchronously on the servers so the returned object can be used
+            to later check on the status of the command. An example of the
+            return:
+            
+            {
+                "executionStatus": {
+                    "eventId": "<some string>@bmw.de",
+                    "status": "INITIATED",
+                    "serviceType": "LIGHT_FLASH"
+                }
+            }
+        """
+
+        api_endpoint = self.__API_ENDPOINT_TEMPLATE.format(
+            vin=self.vin, endpoint='executeService'
+        )
+        payload = {
+            'serviceType': command,
+        }
+        for parameter, value in kwargs.items():
+            if type(parameter) is str and type(value) is str:
+                payload[parameter] = value
+        post_data = urllib.parse.urlencode(payload).encode()
+
+        return self.__api_client.call_endpoint(
+            api_endpoint, data=post_data, method='POST'
+        )
+
+    def flash_lights(self, count: int=1) -> dict:
+        """Flash the vehicle's lights.
+        
+        Args: 
+            count: Number of times to cycle the lights on and off.
+
+        Returns:
+            Details of the light flash command event.
+        """
+
+        return self.__execute_command('LIGHT_FLASH', count=str(count))
+
+    def honk_horn(self) -> dict:
+        """Sound the vehicle's horn.
+        
+        This apparently doesn't work with UK-registered BMW vehicles, but I
+        have no way to test and cannot verify. Regardless, don't be a jerk.
+        
+        Returns:
+            Details of the horn command event.
+        """
+
+        return self.__execute_command('HORN_BLOW')
