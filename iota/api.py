@@ -25,15 +25,15 @@ regions = __Regions._make(__VALID_REGIONS)
 
 class BMWiApiClient(object):
     """Main class for interacting with the BMW i API.
-    
+
     This client derives from reverse-engineering efforts of the BMW i API; no
     official documentation or support exists. As such, absolutely no warranty
     is provided in regards to its accuracy or functionality. In case it's still
     not clear, don't be upset if and when it breaks.
-    
+
     BMW does not issue API keys, so you'll have to derive one on your own. The
     mobile apps are a good place to start.
-    
+
     Attributes:
         access_token: An OAuth token provided by the API authentication system.
         api_key: A BMW API key.
@@ -80,7 +80,7 @@ class BMWiApiClient(object):
 
     def get_access_token(self) -> str:
         """Authenticate against the BMW i API and get a new OAuth token.
-        
+
         Returns:
             A new OAuth authorization token. This must be sent in a header with
             each and every API request in this format:
@@ -127,7 +127,7 @@ class BMWiApiClient(object):
             self, api_endpoint: str, data: bytes=None, method: str='GET'
     ) -> dict:
         """Call an API endpoint, optionally with data and the specified method.
-        
+
         If data is passed, the method will be set to POST regardless of the
         method parameter. Data should be in URL-encoded form format.
 
@@ -194,4 +194,6 @@ class BMWiApiClient(object):
         api_response = self.call_endpoint(
             'vehicles/{vin}/status'.format(vin=vin))
 
-        return vehicle.Vehicle(self, vehicle_data, api_response['vehicleStatus'])
+        return vehicle.Vehicle(
+            self, vehicle_data, api_response['vehicleStatus']
+        )

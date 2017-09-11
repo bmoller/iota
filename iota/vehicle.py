@@ -1,4 +1,5 @@
 import collections
+import urllib.error
 import urllib.parse
 
 from iota import api
@@ -10,11 +11,11 @@ MILE_CONVERSION_FACTOR = 2.54 * 12 * 5280 / 100 / 1000
 
 class Vehicle(object):
     """Represents a single vehicle registered to a ConnectedDrive account.
-    
+
     Vehicle commands are executed asynchronously on the servers; the returned
     object can be used to later check on the status of the command. An example
     of the returned event details:
-            
+
     {
         "executionStatus": {
             "eventId": "<some string>@bmw.de",
@@ -22,7 +23,7 @@ class Vehicle(object):
             "serviceType": "LIGHT_FLASH"
         }
     }
-            
+
     Attributes:
         body_type: BMW's internal model code (eg I01, I12).
         brand: Line of vehicles this instance belongs to.
@@ -76,15 +77,7 @@ class Vehicle(object):
     has_alarm = bool
 
     # Named tuples from vehicle data JSON
-    __Features = collections.namedtuple(
-        '__Features', [
-            'a4a', 'car_cloud', 'charge_now', 'climate_control', 'climate_now',
-            'door_lock', 'door_unlock', 'horn_blow', 'last_destinations',
-            'light_flash', 'remote_360', 'send_poi', 'smart_solution',
-            'vehicle_finder',
-        ]
-    )
-    features = __Features
+    features = collections.namedtuple
 
     # Attributes that match the status data JSON
     hood = str
@@ -98,26 +91,9 @@ class Vehicle(object):
     update_time = str
 
     # Named tuples from status data JSON
-    __Doors = collections.namedtuple(
-        '__Doors', [
-            'driver_front', 'driver_rear', 'passenger_front',
-            'passenger_rear', 'locked',
-        ]
-    )
-    doors = __Doors
-    __Range = collections.namedtuple(
-        '__Range', [
-            'fuel_level', 'max_electric', 'remaining_electric',
-        ]
-    )
-    range = __Range
-    __Windows = collections.namedtuple(
-        '__Windows', [
-            'driver_front', 'driver_rear', 'passenger_front',
-            'passenger_rear',
-        ]
-    )
-    windows = __Windows
+    doors = collections.namedtuple
+    range = collections.namedtuple
+    windows = collections.namedtuple
 
     __API_ENDPOINT_TEMPLATE = '/vehicles/{vin}/{endpoint}'
 
@@ -126,6 +102,7 @@ class Vehicle(object):
             status_data: dict, distance_unit: str='kilometers'
     ):
 
+        self.__charging_profile = None
         self.__api_client = api_client
         self.distance_unit = distance_unit
 
@@ -147,7 +124,15 @@ class Vehicle(object):
         }.items():
             setattr(self, attribute, vehicle_data[source])
 
-        self.features = self.__Features(
+        Features = collections.namedtuple(
+            'Features', [
+                'a4a', 'car_cloud', 'charge_now', 'climate_control',
+                'climate_now', 'door_lock', 'door_unlock', 'horn_blow',
+                'last_destinations', 'light_flash', 'remote_360', 'send_poi',
+                'smart_solution', 'vehicle_finder',
+            ]
+        )
+        self.features = Features(
             a4a=vehicle_data['a4a'], car_cloud=vehicle_data['carCloud'],
             charge_now=vehicle_data['chargeNow'],
             climate_control=vehicle_data['climateControl'],
@@ -165,7 +150,7 @@ class Vehicle(object):
 
         self.__update_status(status_data)
 
-    def __update_status(self, status_data: dict):
+    def __update_status(self, status_values: dict):
 
         for attribute in [
             'hood',
@@ -174,7 +159,7 @@ class Vehicle(object):
             'trunk',
             'vin',
         ]:
-            setattr(self, attribute, status_data[attribute])
+            setattr(self, attribute, status_values[attribute])
 
         for attribute, source in {
             'charging_status': 'chargingStatus',
@@ -182,23 +167,42 @@ class Vehicle(object):
             'parking_light': 'parkingLight',
             'update_time': 'updateTime',
         }.items():
-            setattr(self, attribute, status_data[source])
+            setattr(self, attribute, status_values[source])
 
-        doors_are_locked = status_data['doorLockState'] == 'SECURED'
-        self.doors = self.__Doors(
-            status_data['doorDriverFront'], status_data['doorDriverRear'],
-            status_data['doorPassengerFront'], status_data['doorPassengerRear'],
-            doors_are_locked
+        Doors = collections.namedtuple(
+            'Doors', [
+                'driver_front', 'driver_rear', 'passenger_front',
+                'passenger_rear', 'locked',
+            ]
+        )
+        self.doors = Doors(
+            driver_front=status_values['doorDriverFront'],
+            driver_rear=status_values['doorDriverRear'],
+            passenger_front=status_values['doorPassengerFront'],
+            passenger_rear=status_values['doorPassengerRear'],
+            locked=(status_values['doorLockState'] == 'SECURED')
         )
 
-        self.range = self.__Range(
-            status_data['remainingFuel'], status_data['maxRangeElectric'],
-            status_data['remainingRangeElectric'],
+        Range = collections.namedtuple(
+            'Range', ['fuel_level', 'max_electric', 'remaining_electric', ]
+        )
+        self.range = Range(
+            fuel_level=status_values['remainingFuel'],
+            max_electric=status_values['maxRangeElectric'],
+            remaining_electric=status_values['remainingRangeElectric']
         )
 
-        self.windows = self.__Windows(
-            status_data['windowDriverFront'], status_data['windowDriverRear'],
-            status_data['windowPassengerFront'], status_data['windowPassengerRear']
+        Windows = collections.namedtuple(
+            'Windows', [
+                'driver_front', 'driver_rear', 'passenger_front',
+                'passenger_rear',
+            ]
+        )
+        self.windows = Windows(
+            driver_front=status_values['windowDriverFront'],
+            driver_rear=status_values['windowDriverRear'],
+            passenger_front=status_values['windowPassengerFront'],
+            passenger_rear=status_values['windowPassengerRear']
         )
 
     def update(self):
@@ -214,14 +218,16 @@ class Vehicle(object):
         """
 
         Args:
-            command: API-recognized command string (eg
+            command: API-recognized command string (eg HORN_BLOW, LIGHT_FLASH)
+            kwargs: Key/value pairs of strings. These will be URL-encoded and
+                    sent via POST in the body
 
         Returns:
             The response from the BMW API. Vehicle commands are executed
             asynchronously on the servers so the returned object can be used
             to later check on the status of the command. An example of the
             return:
-            
+
             {
                 "executionStatus": {
                     "eventId": "<some string>@bmw.de",
@@ -246,10 +252,126 @@ class Vehicle(object):
             api_endpoint, data=post_data, method='POST'
         )
 
+    @property
+    def charging_profile(self) -> collections.namedtuple:
+        """The automated charging and climate settings of this Vehicle.
+
+        The data for this parameter is loaded on first access; subsequent
+        access will return the previously-received data.
+
+        Returns:
+            A complete charging profile.
+        """
+
+        if self.__charging_profile:
+            return self.__charging_profile
+
+        ChargingProfile = collections.namedtuple(
+            'ChargingProfile', [
+                'weekly_planner',
+            ]
+        )
+        WeeklyPlanner = collections.namedtuple(
+            'WeeklyPlanner', [
+                'climatization_enabled', 'mode', 'override_timer',
+                'preferences', 'preferred_window', 'timer_1', 'timer_2',
+                'timer_3',
+            ]
+        )
+        ChargingTimer = collections.namedtuple(
+            'ChargingTimer', [
+                'departure_time', 'enabled', 'weekdays',
+            ]
+        )
+        ChargingWindow = collections.namedtuple(
+            'ChargingWindow', [
+                'enabled', 'end_time', 'start_time',
+            ]
+        )
+
+        api_response = self.__api_client.call_endpoint(
+            self.__API_ENDPOINT_TEMPLATE.format(
+                vin=self.vin, endpoint='chargingprofile'
+            )
+        )
+
+        weekly_planner_values = api_response['weeklyPlanner']
+        preferred_window_values = weekly_planner_values['preferredChargingWindow']
+        preferred_window = ChargingWindow(
+            enabled=preferred_window_values['enabled'],
+            end_time=preferred_window_values['endTime'],
+            start_time=preferred_window_values['startTime']
+        )
+        # It appears that unconfigured timers have only the 'weekdays' property
+        timer_1 = None
+        if len(weekly_planner_values['timer1'] > 1):
+            timer_1_values = weekly_planner_values['timer1']
+            timer_1 = ChargingTimer(
+                departure_time=timer_1_values['departureTime'],
+                enabled=timer_1_values['timerEnabled'],
+                weekdays=timer_1_values['weekdays'],
+            )
+        timer_2 = None
+        if len(weekly_planner_values['timer2'] > 1):
+            timer_2_values = weekly_planner_values['timer2']
+            timer_2 = ChargingTimer(
+                departure_time=timer_2_values['departureTime'],
+                enabled=timer_2_values['timerEnabled'],
+                weekdays=timer_2_values['weekdays'],
+            )
+        timer_3 = None
+        if len(weekly_planner_values['timer3'] > 1):
+            timer_3_values = weekly_planner_values['timer3']
+            timer_3 = ChargingTimer(
+                departure_time=timer_3_values['departureTime'],
+                enabled=timer_3_values['timerEnabled'],
+                weekdays=timer_3_values['weekdays'],
+            )
+        override_timer = None
+        if len(weekly_planner_values['overrideTimer'] > 1):
+            override_timer_values = weekly_planner_values['overrideTimer']
+            override_timer = ChargingTimer(
+                departure_time=override_timer_values['departureTime'],
+                enabled=override_timer_values['timerEnabled'],
+                weekdays=override_timer_values['weekdays'],
+            )
+
+        weekly_planner = WeeklyPlanner(
+            climatization_enabled=weekly_planner_values['climatizationEnabled'],
+            mode=weekly_planner_values['chargingMode'],
+            override_timer=override_timer,
+            preferences=weekly_planner_values['chargingPreferences'],
+            preferred_window=preferred_window, timer_1=timer_1,
+            timer_2=timer_2, timer_3=timer_3
+        )
+        self.__charging_profile = ChargingProfile(
+            weekly_planner=weekly_planner
+        )
+
+        return self.__charging_profile
+
+    @property.setter
+    def charging_profile(self, value):
+        """Prevents setting the 'charging_profile' property.
+
+        To update this property, call update_charging_profile on the instance.
+
+        Args:
+            value: Doesn't matter; shouldn't make this call.
+
+        Raises:
+            TypeError: Raised every time.
+        """
+
+        raise TypeError(
+            'Method not supported; call update_charging_profile() on the '
+            'instance to refresh the profile'
+        )
+
     def flash_lights(self, count: int=1) -> dict:
         """Flash the vehicle's lights.
-        
-        Args: 
+
+        Args:
             count: Number of times to cycle the lights on and off.
 
         Returns:
@@ -260,12 +382,56 @@ class Vehicle(object):
 
     def honk_horn(self) -> dict:
         """Sound the vehicle's horn.
-        
+
         This apparently doesn't work with UK-registered BMW vehicles, but I
         have no way to test and cannot verify. Regardless, don't be a jerk.
-        
+
         Returns:
             Details of the horn command event.
         """
 
         return self.__execute_command('HORN_BLOW')
+
+    def check_command_status(self, service_type: str) -> dict:
+        """Check the current status of a prior-issued command.
+
+        Commands are executed asynchronously; the API returns without waiting
+        for a response. The status of a command can be checked by sending the
+        type as a parameter. I've tested, and it appears that only the last
+        event of a type is available to check. Passing eventId as a parameter
+        will not retrieve the event details for a different command.
+
+        Args:
+            service_type: Command type, such as HORN_BLOW or LIGHT_FLASH.
+
+        Returns:
+            The current status of the command as returned by the API. The dict
+            will look something like:
+
+            {
+                "executionStatus": {
+                    "extendedStatus": {
+                        "result": "STATUS_CHANGED"
+                    },
+                    "eventId": "<some string>@bmw.de",
+                    "status": "EXECUTED",
+                    "serviceType": "HORN_BLOW"
+                }
+            }
+
+        Raises:
+            HTTPError: The API doesn't have a record of a command of the passed
+                       type.
+        """
+
+        api_endpoint = self.__API_ENDPOINT_TEMPLATE.format(
+            vin=self.vin,
+            endpoint='serviceExecutionStatus?serviceType={service_type}'.format(
+                service_type=service_type
+            )
+        )
+
+        try:
+            return self.__api_client.call_endpoint(api_endpoint)
+        except urllib.error.HTTPError:
+            raise
