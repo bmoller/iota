@@ -151,7 +151,7 @@ class BMWiApiClient(object):
 
         request_headers = {
             'Authorization': 'Bearer {token}'.format(token=self.access_token),
-            'Content-Type': 'x-www-form-urlencoded',
+            'Content-Type': 'application/x-www-form-urlencode',
         }
         api_request = urllib.request.Request(
             urllib.parse.urljoin(self.__API_BASE_URL, api_endpoint), data=data,
