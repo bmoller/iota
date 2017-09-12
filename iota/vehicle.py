@@ -2,8 +2,6 @@ import collections
 import urllib.error
 import urllib.parse
 
-from iota import api
-
 # It's nice to be exact; official SI unit conversion states that one inch is
 # equal to 2.54 centimeters. This factor derives from that fact.
 MILE_CONVERSION_FACTOR = 2.54 * 12 * 5280 / 100 / 1000
@@ -95,11 +93,11 @@ class Vehicle(object):
     range = collections.namedtuple
     windows = collections.namedtuple
 
-    __API_ENDPOINT_TEMPLATE = '/vehicles/{vin}/{endpoint}'
+    __API_ENDPOINT_TEMPLATE = 'vehicles/{vin}/{endpoint}'
 
     def __init__(
-            self, api_client: api.BMWiApiClient, vehicle_data: dict,
-            status_data: dict, distance_unit: str='kilometers'
+            self, api_client, vehicle_data: dict, status_data: dict,
+            distance_unit: str='kilometers'
     ):
 
         self.__charging_profile = None
@@ -350,7 +348,7 @@ class Vehicle(object):
 
         return self.__charging_profile
 
-    @property.setter
+    @charging_profile.setter
     def charging_profile(self, value):
         """Prevents setting the 'charging_profile' property.
 
