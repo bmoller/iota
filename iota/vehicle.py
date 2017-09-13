@@ -213,10 +213,31 @@ class Vehicle(object):
         self.__update_status(api_response['vehicleStatus'])
 
     def __execute_command(self, command: str, **kwargs) -> dict:
-        """
+        """Send a command to the vehicle.
+
+        There is obviously no guarantee of accuracy, but the list of service
+        types appears to be:
+
+            CHARGE_NOW
+            CHARGING_CONTROL
+            CLIMATE_CONTROL
+            CLIMATE_NOW
+            DOOR_LOCK
+            DOOR_UNLOCK
+            GET_ALL_IMAGES
+            GET_PASSWORD_RESET_INFO
+            GET_VEHICLES
+            GET_VEHICLE_IMAGE
+            GET_VEHICLE_STATUS
+            HORN_BLOW
+            LIGHT_FLASH
+            LOCAL_SEARCH
+            LOCAL_SEARCH_SUGGESTIONS
+            SEND_POI_TO_CAR
+            VEHICLE_FINDER
 
         Args:
-            command: API-recognized command string (eg HORN_BLOW, LIGHT_FLASH)
+            command: API-recognized service type (see above list)
             kwargs: Key/value pairs of strings. These will be URL-encoded and
                     sent via POST in the body
 
@@ -389,6 +410,54 @@ class Vehicle(object):
         """
 
         return self.__execute_command('HORN_BLOW')
+
+    def lock_doors(self) -> dict:
+        """Lock the vehicle's doors.
+
+        Returns:
+            Details of the lock command event.
+        """
+
+        return self.__execute_command('DOOR_LOCK')
+
+    def precondition(self) -> dict:
+        """Activate the vehicle's climate control.
+
+        This command doesn't allow for setting a temperature or making other
+        modifications; the system will be activated with the last settings in
+        place.
+
+        Returns:
+            Details of the climate command event.
+        """
+
+        return self.__execute_command('CLIMATE_NOW')
+
+    def charge(self) -> dict:
+        """Start the vehicle's charging system, if inactive.
+
+        If the vehicle is configured with a charging schedule and is not
+        currently charging, this command starts charging manually.
+
+        Returns:
+            Details of the charge command event.
+        """
+
+        return self.__execute_command('CHARGE_NOW')
+
+    def get_all_images(self) -> dict:
+        """Get the images used for 360 view?
+
+        My i3 doesn't support this service, so I have no means of testing and
+        implementing.
+
+        Raises:
+            NotImplementedError: Currently raised in response to every call.
+        """
+
+        raise NotImplementedError('This command is not yet implemented.')
+
+        return self.__execute_command('GET_ALL_IMAGES')
 
     def check_command_status(self, service_type: str) -> dict:
         """Check the current status of a prior-issued command.
