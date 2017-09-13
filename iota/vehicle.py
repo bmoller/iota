@@ -502,3 +502,30 @@ class Vehicle(object):
             return self.__api_client.call_endpoint(api_endpoint)
         except urllib.error.HTTPError:
             raise
+
+    def get_image(self, view: str='FRONT', width: int=1024) -> bytes:
+        """Get an image of the vehicle from the specified view.
+
+        From my extremely limited testing, this appears to be accurate to the
+        specific vehicle's options. My i3 shows up with the sport wheels,
+        correct color, and without REx, as in real-life.
+
+        Args:
+            view: Angle of the image. Valid views known so far are FRONT, REAR,
+                  and SIDE.
+            width: Width of the returned image in pixels. I'm sure there are
+                   bounds on the value, but I haven't tested extensively enough
+                   to determine what they are.
+
+        Returns:
+            The requested image, in PNG format.
+        """
+
+        return self.__api_client.call_endpoint(
+            self.__API_ENDPOINT_TEMPLATE.format(
+                vin=self.vin,
+                endpoint='image?view={view}&width={width}'.format(
+                    view=view, width=width
+                )
+            ), parse_as_json=False
+        )
