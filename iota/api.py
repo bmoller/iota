@@ -124,7 +124,8 @@ class BMWiApiClient(object):
         return api_response['access_token']
 
     def call_endpoint(
-            self, api_endpoint: str, data: bytes=None, method: str='GET'
+        self, api_endpoint: str, data: bytes=None, method: str='GET',
+        parse_as_json: bool=True
     ) -> dict:
         """Call an API endpoint, optionally with data and the specified method.
 
@@ -135,10 +136,14 @@ class BMWiApiClient(object):
             api_endpoint: A path to the endpoint to call.
             data: Bytes to POST in the API call.
             method: The HTTP method to use for the request (eg GET or POST).
+            parse_as_json: Most API methods return a text response in JSON
+                           format; this method can parse those to Python
+                           objects. However, a few return binary data and this
+                           parameter enables access to the raw bytes.
 
         Returns:
-            The response from the BMW API. The API returns a JSON object; for
-            convenience this method parses it and returns it as a dictionary.
+            The response from the BMW API. If `parse_as_json` is `True` this
+            will be a Python `dict`. Otherwise, the raw `bytes` are returned.
 
         Raises:
             HTTPError: The error response returned by the API endpoint.
@@ -159,10 +164,12 @@ class BMWiApiClient(object):
 
         try:
             with urllib.request.urlopen(api_request) as http_response:
-                api_response = json.loads(
-                    str(http_response.read(), encoding='utf8'))
+                api_response = http_response.read()
         except urllib.error.HTTPError:
             raise
+
+        if parse_as_json:
+            return json.loads(str(api_response, encoding='utf8'))
 
         return api_response
 
