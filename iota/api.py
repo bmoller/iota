@@ -173,16 +173,16 @@ class BMWiApiClient(object):
 
         return api_response
 
-    def get_car(self, vin: str) -> vehicle.Vehicle:
-        """Retrieve a specific car by its VIN.
+    def get_vehicle(self, vin: str) -> vehicle.Vehicle:
+        """Retrieve a specific vehicle by its VIN.
 
         Args:
-            vin: A VIN to query and return as a Car object. In order to succeed
-                the corresponding vehicle must be registered in the
-                ConnectedDrive portal.
+            vin: A VIN to query and return as a Vehicle object. In order to
+                 succeed the corresponding vehicle must be registered in the
+                 ConnectedDrive portal.
 
         Returns:
-            A new Car representing the requested vehicle.
+            A new Vehicle representing the requested vehicle.
 
         Raises:
             KeyError: No vehicle with a matching VIN is listed in this account.
