@@ -59,6 +59,7 @@ class BMWiApiClient(object):
         self.user_password = user_password
         self.api_key = api_key
         self.api_secret = api_secret
+        self.__vehicles = {}
 
         try:
             self.__API_BASE_URL = urllib.parse.urljoin(
@@ -173,6 +174,31 @@ class BMWiApiClient(object):
 
         return api_response
 
+    def __get_vehicles(self):
+        """Refresh the cached vehicle list.
+        """
+
+        self.__vehicles = {}
+        api_response = self.call_endpoint('vehicles')
+        for vehicle_record in api_response['vehicles']:
+            self.__vehicles[vehicle_record['vin']] = vehicle_record
+
+    def vehicles(self, refresh: bool=False) -> list:
+        """Get a list of all vehicles registered with the current account.
+
+        Args:
+            refresh: Discard any cached data and make an API request for the
+                     current list.
+
+        Returns:
+            List of VIN's of the registered vehicles.
+        """
+
+        if not self.__vehicles or refresh:
+            self.__get_vehicles()
+
+        return list(self.__vehicles.keys())
+
     def get_vehicle(self, vin: str) -> vehicle.Vehicle:
         """Retrieve a specific vehicle by its VIN.
 
@@ -188,19 +214,17 @@ class BMWiApiClient(object):
             KeyError: No vehicle with a matching VIN is listed in this account.
         """
 
-        api_response = self.call_endpoint('vehicles')
-        vehicle_data = None
-        for vehicle_record in api_response['vehicles']:
-            if vehicle_record['vin'] == vin:
-                vehicle_data = vehicle_record
-                break
-        else:
+        # Do the logical thing and try refreshing the list before failing
+        if not self.__vehicles or vin not in self.__vehicles:
+            self.__get_vehicles()
+        if vin not in self.__vehicles:
             raise KeyError(
-                'No vehicle with VIN {vin} is registered'.format(vin=vin))
+                'No vehicle with VIN {vin} is registered'.format(vin=vin)
+            )
 
         api_response = self.call_endpoint(
             'vehicles/{vin}/status'.format(vin=vin))
 
         return vehicle.Vehicle(
-            self, vehicle_data, api_response['vehicleStatus']
+            self, self.__vehicles[vin], api_response['vehicleStatus']
         )
