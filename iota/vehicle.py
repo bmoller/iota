@@ -323,7 +323,7 @@ class Vehicle(object):
         )
         # It appears that unconfigured timers have only the 'weekdays' property
         timer_1 = None
-        if len(weekly_planner_values['timer1'] > 1):
+        if len(weekly_planner_values['timer1']) > 1:
             timer_1_values = weekly_planner_values['timer1']
             timer_1 = ChargingTimer(
                 departure_time=timer_1_values['departureTime'],
@@ -331,7 +331,7 @@ class Vehicle(object):
                 weekdays=timer_1_values['weekdays'],
             )
         timer_2 = None
-        if len(weekly_planner_values['timer2'] > 1):
+        if len(weekly_planner_values['timer2']) > 1:
             timer_2_values = weekly_planner_values['timer2']
             timer_2 = ChargingTimer(
                 departure_time=timer_2_values['departureTime'],
@@ -339,7 +339,7 @@ class Vehicle(object):
                 weekdays=timer_2_values['weekdays'],
             )
         timer_3 = None
-        if len(weekly_planner_values['timer3'] > 1):
+        if len(weekly_planner_values['timer3']) > 1:
             timer_3_values = weekly_planner_values['timer3']
             timer_3 = ChargingTimer(
                 departure_time=timer_3_values['departureTime'],
@@ -347,7 +347,7 @@ class Vehicle(object):
                 weekdays=timer_3_values['weekdays'],
             )
         override_timer = None
-        if len(weekly_planner_values['overrideTimer'] > 1):
+        if len(weekly_planner_values['overrideTimer']) > 1:
             override_timer_values = weekly_planner_values['overrideTimer']
             override_timer = ChargingTimer(
                 departure_time=override_timer_values['departureTime'],
