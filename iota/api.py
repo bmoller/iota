@@ -9,10 +9,6 @@ import urllib.request
 import iota.exception
 from iota import vehicle
 
-__API_ENDPOINT = '/webapi/v1/user/'
-__API_SERVER_EUROPE = 'https://b2vapi.bmwgroup.com'
-__API_SERVER_US = 'https://b2vapi.bmwgroup.us'
-__AUTHENTICATION_ENDPOINT = '/webapi/oauth/token/'
 
 __VALID_REGIONS = [
     'CHINA',
@@ -50,23 +46,30 @@ class BMWiApiClient(object):
     user_email = str
     user_password = str
 
+    __API_ENDPOINT = '/webapi/v1/user/'
+    __API_SERVER_CHINA = 'https://b2vapi.bmwgroup.cn:8592'
+    __API_SERVER_EUROPE = 'https://b2vapi.bmwgroup.com'
+    __API_SERVER_US = 'https://b2vapi.bmwgroup.us'
+    __AUTHENTICATION_ENDPOINT = '/webapi/oauth/token/'
+
     def __init__(
-            self, user_email: str, user_password: str, api_key: str,
-            api_secret: str, region: str='US'
+        self, user_email: str, user_password: str, api_key: str,
+        api_secret: str, region: str='US'
     ):
 
         self.user_email = user_email
         self.user_password = user_password
         self.api_key = api_key
         self.api_secret = api_secret
+        self.__vehicles = {}
 
         try:
-            self.__API_BASE_URL = urllib.parse.urljoin(
-                globals()['__API_SERVER_{region}'.format(region=region)],
+            self.__API_URL = urllib.parse.urljoin(
+                getattr(self, '__API_SERVER_{region}'.format(region=region)),
                 globals()['__API_ENDPOINT']
             )
             self.__AUTHENTICATION_URL = urllib.parse.urljoin(
-                globals()['__API_SERVER_{region}'.format(region=region)],
+                getattr(self, '__API_SERVER_{region}'.format(region=region)),
                 globals()['__AUTHENTICATION_ENDPOINT']
             )
         except KeyError:
@@ -149,6 +152,9 @@ class BMWiApiClient(object):
             HTTPError: The error response returned by the API endpoint.
         """
 
+        # URL join method requires this not begin with a forward slash
+        while api_endpoint[0] == '/':
+            api_endpoint = api_endpoint[1:]
         if data:
             method = 'POST'
         if self.access_token is None:
@@ -159,7 +165,7 @@ class BMWiApiClient(object):
             'Content-Type': 'application/x-www-form-urlencode',
         }
         api_request = urllib.request.Request(
-            urllib.parse.urljoin(self.__API_BASE_URL, api_endpoint), data=data,
+            urllib.parse.urljoin(self.__API_URL, api_endpoint), data=data,
             headers=request_headers, method=method)
 
         try:
@@ -169,38 +175,61 @@ class BMWiApiClient(object):
             raise
 
         if parse_as_json:
-            return json.loads(str(api_response, encoding='utf8'))
+            api_response = json.loads(str(api_response, encoding='utf8'))
 
         return api_response
 
-    def get_car(self, vin: str) -> vehicle.Vehicle:
-        """Retrieve a specific car by its VIN.
+    def __get_vehicles(self):
+        """Refresh the cached vehicle list.
+        """
+
+        self.__vehicles = {}
+        api_response = self.call_endpoint('vehicles')
+        for vehicle_record in api_response['vehicles']:
+            self.__vehicles[vehicle_record['vin']] = vehicle_record
+
+    def vehicles(self, refresh: bool=False) -> list:
+        """Get a list of all vehicles registered with the current account.
 
         Args:
-            vin: A VIN to query and return as a Car object. In order to succeed
-                the corresponding vehicle must be registered in the
-                ConnectedDrive portal.
+            refresh: Discard any cached data and make an API request for the
+                     current list.
 
         Returns:
-            A new Car representing the requested vehicle.
+            List of VIN's of the registered vehicles.
+        """
+
+        if not self.__vehicles or refresh:
+            self.__get_vehicles()
+
+        return list(self.__vehicles.keys())
+
+    def get_vehicle(self, vin: str) -> vehicle.Vehicle:
+        """Retrieve a specific vehicle by its VIN.
+
+        Args:
+            vin: A VIN to query and return as a Vehicle object. In order to
+                 succeed the corresponding vehicle must be registered in the
+                 ConnectedDrive portal.
+
+        Returns:
+            A new Vehicle representing the requested vehicle.
 
         Raises:
             KeyError: No vehicle with a matching VIN is listed in this account.
         """
 
-        api_response = self.call_endpoint('vehicles')
-        vehicle_data = None
-        for vehicle_record in api_response['vehicles']:
-            if vehicle_record['vin'] == vin:
-                vehicle_data = vehicle_record
-                break
-        else:
+        # Do the logical thing and try refreshing the list once before failing
+        if not self.__vehicles or vin not in self.__vehicles:
+            self.__get_vehicles()
+        if vin not in self.__vehicles:
             raise KeyError(
-                'No vehicle with VIN {vin} is registered'.format(vin=vin))
+                'No vehicle with VIN {vin} is registered'.format(vin=vin)
+            )
 
         api_response = self.call_endpoint(
             'vehicles/{vin}/status'.format(vin=vin))
 
         return vehicle.Vehicle(
-            self, vehicle_data, api_response['vehicleStatus']
+            self, self.__vehicles[vin], api_response['vehicleStatus']
         )
