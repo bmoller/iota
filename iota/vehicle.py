@@ -197,10 +197,10 @@ class Vehicle(object):
             ]
         )
         self.windows = Windows(
-            driver_front=status_values['windowDriverFront'],
-            driver_rear=status_values['windowDriverRear'],
-            passenger_front=status_values['windowPassengerFront'],
-            passenger_rear=status_values['windowPassengerRear']
+            driver_front=status_values['windowDriverFront'] if 'windowDriverFront' in status_values else 'N/A',
+            driver_rear=status_values['windowDriverRear'] if 'windowDriverRear' in status_values else 'N/A',
+            passenger_front=status_values['windowPassengerFront'] if 'windowPassengerFront' in status_values else 'N/A',
+            passenger_rear=status_values['windowPassengerRear'] if 'windowPassengerRear' in status_values else 'N/A'
         )
 
     def update(self):
