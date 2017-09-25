@@ -10,13 +10,16 @@ import iota.exception
 from iota import vehicle
 
 
-__VALID_REGIONS = [
-    'CHINA',
-    'EUROPE',
-    'US',
-]
-__Regions = collections.namedtuple('__Regions', __VALID_REGIONS)
-regions = __Regions._make(__VALID_REGIONS)
+@property
+def regions() -> collections.namedtuple:
+    valid_regions = [
+        'CHINA',
+        'EUROPE',
+        'US',
+    ]
+    regions_tuple = collections.namedtuple('regions_tuple', valid_regions)
+
+    return regions_tuple._make(valid_regions)
 
 
 class BMWiApiClient(object):
@@ -46,11 +49,11 @@ class BMWiApiClient(object):
     user_email = str
     user_password = str
 
-    __API_ENDPOINT = '/webapi/v1/user/'
-    __API_SERVER_CHINA = 'https://b2vapi.bmwgroup.cn:8592'
-    __API_SERVER_EUROPE = 'https://b2vapi.bmwgroup.com'
-    __API_SERVER_US = 'https://b2vapi.bmwgroup.us'
-    __AUTHENTICATION_ENDPOINT = '/webapi/oauth/token/'
+    _API_ENDPOINT = '/webapi/v1/user/'
+    _API_SERVER_CHINA = 'https://b2vapi.bmwgroup.cn:8592'
+    _API_SERVER_EUROPE = 'https://b2vapi.bmwgroup.com'
+    _API_SERVER_US = 'https://b2vapi.bmwgroup.us'
+    _AUTHENTICATION_ENDPOINT = '/webapi/oauth/token/'
 
     def __init__(
         self, user_email: str, user_password: str, api_key: str,
@@ -61,22 +64,22 @@ class BMWiApiClient(object):
         self.user_password = user_password
         self.api_key = api_key
         self.api_secret = api_secret
-        self.__vehicles = {}
+        self._vehicles = {}
 
         try:
-            self.__API_URL = urllib.parse.urljoin(
-                getattr(self, '__API_SERVER_{region}'.format(region=region)),
-                globals()['__API_ENDPOINT']
+            self._API_URL = urllib.parse.urljoin(
+                getattr(self, '_API_SERVER_{region}'.format(region=region)),
+                self._API_ENDPOINT
             )
-            self.__AUTHENTICATION_URL = urllib.parse.urljoin(
-                getattr(self, '__API_SERVER_{region}'.format(region=region)),
-                globals()['__AUTHENTICATION_ENDPOINT']
+            self._AUTHENTICATION_URL = urllib.parse.urljoin(
+                getattr(self, '_API_SERVER_{region}'.format(region=region)),
+                self._AUTHENTICATION_ENDPOINT
             )
         except KeyError:
             raise KeyError(
                 '{bad_region} is not a valid region; valid regions are {valid_regions}'.format(
                     bad_region=region,
-                    valid_regions=', '.join(globals()['__VALID_REGIONS'])
+                    valid_regions=', '.join(globals()['regions'])
                 ))
 
         self.access_token = self.get_access_token()
@@ -110,7 +113,7 @@ class BMWiApiClient(object):
             'Content-Type': 'application/x-www-form-urlencoded',
         }
         authentication_request = urllib.request.Request(
-            self.__AUTHENTICATION_URL, data=request_data, headers=request_headers)
+            self._AUTHENTICATION_URL, data=request_data, headers=request_headers)
 
         try:
             with urllib.request.urlopen(authentication_request) as http_response:
@@ -165,7 +168,7 @@ class BMWiApiClient(object):
             'Content-Type': 'application/x-www-form-urlencode',
         }
         api_request = urllib.request.Request(
-            urllib.parse.urljoin(self.__API_URL, api_endpoint), data=data,
+            urllib.parse.urljoin(self._API_URL, api_endpoint), data=data,
             headers=request_headers, method=method)
 
         try:
@@ -179,14 +182,14 @@ class BMWiApiClient(object):
 
         return api_response
 
-    def __get_vehicles(self):
+    def _get_vehicles(self):
         """Refresh the cached vehicle list.
         """
 
-        self.__vehicles = {}
+        self._vehicles = {}
         api_response = self.call_endpoint('vehicles')
         for vehicle_record in api_response['vehicles']:
-            self.__vehicles[vehicle_record['vin']] = vehicle_record
+            self._vehicles[vehicle_record['vin']] = vehicle_record
 
     def vehicles(self, refresh: bool=False) -> list:
         """Get a list of all vehicles registered with the current account.
@@ -199,10 +202,10 @@ class BMWiApiClient(object):
             List of VIN's of the registered vehicles.
         """
 
-        if not self.__vehicles or refresh:
-            self.__get_vehicles()
+        if not self._vehicles or refresh:
+            self._get_vehicles()
 
-        return list(self.__vehicles.keys())
+        return list(self._vehicles.keys())
 
     def get_vehicle(self, vin: str) -> vehicle.Vehicle:
         """Retrieve a specific vehicle by its VIN.
@@ -220,9 +223,9 @@ class BMWiApiClient(object):
         """
 
         # Do the logical thing and try refreshing the list once before failing
-        if not self.__vehicles or vin not in self.__vehicles:
-            self.__get_vehicles()
-        if vin not in self.__vehicles:
+        if not self._vehicles or vin not in self._vehicles:
+            self._get_vehicles()
+        if vin not in self._vehicles:
             raise KeyError(
                 'No vehicle with VIN {vin} is registered'.format(vin=vin)
             )
@@ -231,5 +234,5 @@ class BMWiApiClient(object):
             'vehicles/{vin}/status'.format(vin=vin))
 
         return vehicle.Vehicle(
-            self, self.__vehicles[vin], api_response['vehicleStatus']
+            self, self._vehicles[vin], api_response['vehicleStatus']
         )
