@@ -174,10 +174,10 @@ class Vehicle(object):
             ]
         )
         self.doors = Doors(
-            driver_front=status_values['doorDriverFront'],
-            driver_rear=status_values['doorDriverRear'],
-            passenger_front=status_values['doorPassengerFront'],
-            passenger_rear=status_values['doorPassengerRear'],
+            driver_front=status_values['doorDriverFront'] if 'doorDriverFront' in status_values else 'N/A',
+            driver_rear=status_values['doorDriverRear'] if 'doorDriverRear' in status_values else 'N/A',
+            passenger_front=status_values['doorPassengerFront'] if 'doorPassengerFront' in status_values else 'N/A',
+            passenger_rear=status_values['doorPassengerRear'] if 'doorPassengerRear' in status_values else 'N/A',
             locked=(status_values['doorLockState'] == 'SECURED')
         )
 
