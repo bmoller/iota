@@ -37,9 +37,9 @@ class BMWiApiClient(object):
         access_token: An OAuth token provided by the API authentication system.
         api_key: A BMW API key.
         api_secret: The matching secret for the API key.
+        refresh_token: An OAuth token that can be used to re-authenticate
+            without a user name and password.
         region: A valid region for the BMW API.
-        user_email: A ConnectedDrive user name, usually an e-mail address.
-        user_password: The password of the ConnectedDrive user.
     """
 
     access_token = str
@@ -56,12 +56,38 @@ class BMWiApiClient(object):
     _AUTHENTICATION_ENDPOINT = '/webapi/oauth/token/'
 
     def __init__(
-        self, user_email: str, user_password: str, api_key: str,
-        api_secret: str, region: str='US'
+        self, api_key: str, api_secret: str, username: str=None,
+        password: str=None, refresh_token: str=None, region: str='US'
     ):
+        """Create a new instance.
 
-        self.user_email = user_email
-        self.user_password = user_password
+        Args:
+            api_key: API key for the ConnectedDrive service.
+            api_secret: API secret for the ConnectedDrive service.
+            username: A ConnectedDrive username, generally the user's
+                registered e-mail address.
+            password: Password of the ConnectedDrive account.
+            refresh_token: An OAuth refresh token that can be used to
+                authenticate without username and password. If this is
+                provided a username and password are not required; a refresh
+                token is the preferred authentication method.
+            region: A region to connect to for the ConnectedDrive service.
+
+        Raises:
+            RuntimeError: Occurs when the constructor does not receive required
+                authentication information. Either an OAuth refresh token or
+                both a user email address and user password must be provided in
+                order to successfully authenticate.
+        """
+
+        if (
+            (username is None or password is None) and refresh_token is None
+        ):
+            raise RuntimeError(
+                'Either refresh_token or both user_email and user_password '
+                'must not be None'
+            )
+
         self.api_key = api_key
         self.api_secret = api_secret
         self._vehicles = {}
@@ -77,19 +103,32 @@ class BMWiApiClient(object):
             )
         except KeyError:
             raise KeyError(
-                '{bad_region} is not a valid region; valid regions are {valid_regions}'.format(
+                '{bad_region} is not a valid region; valid regions are '
+                '{valid_regions}'.format(
                     bad_region=region,
                     valid_regions=', '.join(globals()['regions'])
-                ))
+                )
+            )
 
-        self.access_token = self.get_access_token()
+        self.access_token, self.refresh_token = self.get_access_token(
+            username=username, password=password, refresh_token=refresh_token)
 
-    def get_access_token(self) -> str:
+    def get_access_token(
+        self, username: str=None, password: str=None, refresh_token: str=None
+    ) -> tuple:
         """Authenticate against the BMW i API and get a new OAuth token.
 
+        Args:
+            username: A ConnectedDrive user account e-mail address.
+            password: The password for the ConnectedDrive account.
+            refresh_token: A OAuth refresh token returned by a previous
+                authentication request. If this parameter is supplied any
+                username and password also supplied are ignored.
+
         Returns:
-            A new OAuth authorization token. This must be sent in a header with
-            each and every API request in this format:
+            A tuple with both a new OAuth authorization token and a new OAuth
+            refresh token. The authorization token must be sent in a header
+            with each and every API request in this format:
 
             Authorization: Bearer <OAuth authorization token>
 
@@ -97,23 +136,33 @@ class BMWiApiClient(object):
             InvalidCredentialsException: Authentication against the API failed.
         """
 
-        authentication_string = '{key}:{secret}'.format(key=self.api_key,
-                                                        secret=self.api_secret)
+        authentication_string = '{key}:{secret}'.format(
+            key=self.api_key, secret=self.api_secret
+        )
         authentication_string_bytes = authentication_string.encode()
         base64_auth = base64.b64encode(authentication_string_bytes)
         base64_auth_token = str(base64_auth, encoding='utf8')
-        request_data = urllib.parse.urlencode({
-            'grant_type': 'password',
-            'password': self.user_password,
+        form_data = {
             'scope': 'remote_services vehicle_data',
-            'username': self.user_email,
-        }).encode()
+        }
+        if refresh_token:
+            form_data.update({
+                'grant_type': 'refresh_token',
+                'refresh_token': refresh_token,
+            })
+        else:
+            form_data.update({
+                'grant_type': 'password',
+                'password': password,
+                'username': username,
+            })
+        post_data = urllib.parse.urlencode(form_data).encode()
         request_headers = {
             'Authorization': 'Basic {token}'.format(token=base64_auth_token),
             'Content-Type': 'application/x-www-form-urlencoded',
         }
         authentication_request = urllib.request.Request(
-            self._AUTHENTICATION_URL, data=request_data, headers=request_headers)
+            self._AUTHENTICATION_URL, data=post_data, headers=request_headers)
 
         try:
             with urllib.request.urlopen(authentication_request) as http_response:
@@ -121,13 +170,18 @@ class BMWiApiClient(object):
                     str(http_response.read(), encoding='utf8'))
         except urllib.error.HTTPError as http_error:
             api_response = json.loads(str(http_error.read(), encoding='utf8'))
-            if http_error.code == http.HTTPStatus.BAD_REQUEST and api_response['error'] == 'invalid_grant':
+            if (
+                http_error.code == http.HTTPStatus.BAD_REQUEST
+                and api_response['error'] == 'invalid_grant'
+            ):
                 raise iota.exception.InvalidCredentialsException(
-                    'OAuth authentication failed; check user_email, user_password, api_key, and api_secret.')
+                    'OAuth authentication failed; check user_email, '
+                    'user_password, api_key, and api_secret.'
+                )
             else:
                 raise
 
-        return api_response['access_token']
+        return api_response['access_token'], api_response['refresh_token']
 
     def call_endpoint(
         self, api_endpoint: str, data: bytes=None, method: str='GET',
