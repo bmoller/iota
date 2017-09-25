@@ -29,7 +29,6 @@ class Vehicle(object):
             should be possible to determine if the vehicle supports DC fast
             charging by the presence or absence of the string 'DC' in this
             list.
-        charging_status: The current charging status of the vehicle.
         connection_status: A status indicating if the vehicle is currently
             connected to the telematics network.
         construction_year: The year the vehicle was built (which may not match
@@ -89,6 +88,7 @@ class Vehicle(object):
     update_time = str
 
     # Named tuples from status data JSON
+    charge = collections.namedtuple
     doors = collections.namedtuple
     range = collections.namedtuple
     windows = collections.namedtuple
@@ -160,12 +160,21 @@ class Vehicle(object):
             setattr(self, attribute, status_values[attribute])
 
         for attribute, source in {
-            'charging_status': 'chargingStatus',
             'connection_status': 'connectionStatus',
             'parking_light': 'parkingLight',
             'update_time': 'updateTime',
         }.items():
             setattr(self, attribute, status_values[source])
+
+        Charge = collections.namedtuple(
+            'Charge', [
+                'minutes_until_full', 'status',
+            ]
+        )
+        self.charge = Charge(
+            minutes_until_full=status_values['chargingTimeRemaining'] if 'chargingTimeRemaining' in status_values else 'N/A',
+            status=status_values['chargingStatus'] if 'chargingStatus' in status_values else 'N/A'
+        )
 
         Doors = collections.namedtuple(
             'Doors', [
