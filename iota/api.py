@@ -190,7 +190,8 @@ class BMWiApiClient(object):
             'Content-Type': 'application/x-www-form-urlencoded',
         }
         authentication_request = urllib.request.Request(
-            self.AUTHENTICATION_URL, data=post_data, headers=request_headers)
+            self.AUTHENTICATION_URL, data=post_data, headers=request_headers
+        )
 
         try:
             with urllib.request.urlopen(authentication_request) as http_response:
