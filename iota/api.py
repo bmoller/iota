@@ -257,6 +257,22 @@ class BMWiApiClient(object):
         try:
             with urllib.request.urlopen(api_request) as http_response:
                 api_response = http_response.read()
+        except urllib.error.HTTPError as api_error:
+            if api_error.code == http.HTTPStatus.UNAUTHORIZED:
+                print('Token expired; retrieving new tokens')
+            else:
+                raise
+        else:
+            if parse_as_json:
+                api_response = json.loads(str(api_response, encoding='utf8'))
+
+            return api_response
+
+        self.access_token, self.refresh_token = self.get_access_token()
+
+        try:
+            with urllib.request.urlopen(api_request) as http_response:
+                api_response = http_response.read()
         except urllib.error.HTTPError:
             raise
 
