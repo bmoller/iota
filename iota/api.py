@@ -283,6 +283,12 @@ class BMWiApiClient(object):
             return api_response
 
         self.access_token, self.refresh_token = self.get_access_token()
+        request_headers['Authorization'] = 'Bearer {token}'.format(
+            token=self.access_token
+        )
+        api_request = request.Request(
+            parse.urljoin(self.API_URL, api_endpoint), data=data,
+            headers=request_headers, method=method)
 
         try:
             with request.urlopen(api_request) as http_response:
