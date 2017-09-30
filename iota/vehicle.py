@@ -82,7 +82,6 @@ class Vehicle(object):
     trunk = str
 
     # Attributes that are translated from the status data JSON
-    charging_status = str
     connection_status = str
     parking_light = str
     update_time = str
@@ -168,11 +167,12 @@ class Vehicle(object):
 
         Charge = collections.namedtuple(
             'Charge', [
-                'minutes_until_full', 'status',
+                'minutes_until_full', 'percentage', 'status',
             ]
         )
         self.charge = Charge(
             minutes_until_full=status_values['chargingTimeRemaining'] if 'chargingTimeRemaining' in status_values else 'N/A',
+            percentage=status_values['chargingLevelHv'],
             status=status_values['chargingStatus'] if 'chargingStatus' in status_values else 'N/A'
         )
 
