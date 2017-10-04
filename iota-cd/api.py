@@ -7,7 +7,7 @@ from urllib import error
 from urllib import parse
 from urllib import request
 
-from iota import vehicle
+from iota-cd import vehicle
 
 
 @property
